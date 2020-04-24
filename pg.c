@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <math.h>
 
-int N = 100;
+int N = 10;
 
 #define IX(x, y, z) ((x) + (y) * N + (z) * N * N)
 
@@ -71,19 +71,17 @@ void FluidCubeFree(FluidCube *cube)
 
 void FluidCubeAddDensity(FluidCube *cube, int x, int y, int z, float amount)
 {
-    int N = cube->size;
     cube->density[IX(x, y, z)] += amount;
 }
 
 void FluidCubeAddVelocity(FluidCube *cube, int x, int y, int z, float amountX, float amountY, float amountZ)
 {
-    int N = cube->size;
-    int index = IX(x, y, z);
-    
-    cube->Vx[index] += amountX;
-    cube->Vy[index] += amountY;
-    cube->Vz[index] += amountZ;
+    cube->Vx[IX(x, y, z)] += amountX;
+    cube->Vy[IX(x, y, z)] += amountY;
+    cube->Vz[IX(x, y, z)] += amountZ;
 }
+
+
 static void set_bnd(int b, float *x, int N)
 {
     for(int j = 1; j < N - 1; j++) {
@@ -306,16 +304,16 @@ void Write(FluidCube *cube ,int choice){
             for(int j=0;j<N;j++){
 
                 for(int k=0;k<N;k++){
-                    fprintf(fp, "%.5g,",cube->Vx[IX(i,j,k)]);
-                    fprintf(fp, "%.5g,",cube->Vy[IX(i,j,k)]);
-                    fprintf(fp, "%.5g,",cube->Vz[IX(i,j,k)]);
+                    fprintf(fp, "%.5f,",cube->Vx[IX(i,j,k)]);
+                    fprintf(fp, "%.5f,",cube->Vy[IX(i,j,k)]);
+                    fprintf(fp, "%.5f,",cube->Vz[IX(i,j,k)]);
 
-                    fprintf(fp, "%.5g,",cube->Vx0[IX(i,j,k)]);
-                    fprintf(fp, "%.5g,",cube->Vy0[IX(i,j,k)]);
-                    fprintf(fp, "%.5g,",cube->Vy0[IX(i,j,k)]);
+                    fprintf(fp, "%.5f,",cube->Vx0[IX(i,j,k)]);
+                    fprintf(fp, "%.5f,",cube->Vy0[IX(i,j,k)]);
+                    fprintf(fp, "%.5f,",cube->Vy0[IX(i,j,k)]);
 
-                    fprintf(fp, "%.5g,",cube->s[IX(i,j,k)]);
-                    fprintf(fp, "%.5g,",cube->density[IX(i,j,k)]);
+                    fprintf(fp, "%.5f,",cube->s[IX(i,j,k)]);
+                    fprintf(fp, "%.5f,",cube->density[IX(i,j,k)]);
             }
 
             }
@@ -330,7 +328,7 @@ void Write(FluidCube *cube ,int choice){
             for(int j=0;j<N;j++){
 
                 for(int k=0;k<N;k++){
-                    fprintf(fp, "%.5g,",cube->density[IX(i,j,k)]);
+                    fprintf(fp, "%.5f,",cube->density[IX(i,j,k)]);
             }
 
             }
@@ -359,6 +357,57 @@ int int_rand(int lower, int upper)
      
 }
 
+
+
+//cosine interpolation 
+
+float interpolate(float a,float b,float x){
+    float ft = x * 3.14159265359;
+    float f = ( 1- cos(ft))*0.5;
+
+    return a*( 1-f ) + b * f ;
+}
+
+struct noise
+{
+    float *Array;
+};
+typedef struct noise noise ;
+
+noise *createNoise(int No){
+    noise *Noise = malloc(sizeof(*Noise));
+
+    Noise->Array = calloc(No, sizeof(float));
+
+
+    float prevRandomNo = float_rand(0,10);
+    float randomNo = float_rand(0,10);
+    Noise->Array[0]=prevRandomNo;
+    int fraction =1;
+    
+    
+    for(int i=1;i<No;i++){
+
+        if(i%10 == 0){
+
+            prevRandomNo=randomNo;
+            randomNo=float_rand(0,10);
+            Noise->Array[i]=prevRandomNo;
+            int fraction = 1;
+        }
+        Noise->Array[i]=interpolate(prevRandomNo,randomNo, i/(No*1.0) );
+        fraction+=1;
+    }
+
+    return Noise;
+}
+
+void freeNoise (noise *n){
+    free(n->Array);
+    free(n);
+}
+
+
 int main(){
     
     // do this no_of_experiment times
@@ -367,7 +416,7 @@ int main(){
 
             // do this no_of_obs times
 
-                // add random density of dye (normal distribution although high value) at the center positions N/2 - i to N/2 + i  (i = 3 for now)
+                // add random density of dye (normal distribution although high value) at the center positions N/2 - i to N/2 + i  (i = 1 for now)
 
                 // give velocity to these points in fluid
 
@@ -378,49 +427,59 @@ int main(){
         // delete fluid cube 
 
 
-    int no_of_experiments = 1;
-    int no_of_observations = 1;
+    int no_of_experiments = 2;
+    int no_of_observations = 2;
     float dt = 1/60; 
-    int c = N/2;
+    int c = (N/2)-1;
+
     
 
     for(int i=0;i<no_of_experiments;i++){
+
+        printf("experiment no %i \n",i);
+
         FILE *fp = fopen ("output.txt", "a");
         
         float diffusion = float_rand(0.0,0.3);
         float viscocity = float_rand(0.00000001,0.000001);
 
-        fprintf(fp,"%,5g,%.5g",diffusion,viscocity);
+        fprintf(fp,"%.5f,%.5f",diffusion,viscocity);
 
         fclose(fp);
         FluidCube *cube = FluidCubeCreate(N,diffusion,viscocity,dt);
 
         
         for(int j=0;j<no_of_observations;j++){
-            float t = 3.06;
-            for(int k=-1; k<=1;k++){
-                for(int l=-1; l<=1;l++){
-                    for(int m=-1; m<=1;m++){
+        
+        
+            noise *perlin = createNoise(100);
+            int t = int_rand(0,50);
+
+
+            for(int k=0; k<=1;k++){
+                for(int l=0; l<=1;l++){
+                    for(int m=0; m<=1;m++){
                         
                         //add density
                         FILE *fp = fopen ("output.txt", "a");
 
+                        
 
-                        float amount =float_rand(150,200);
-                        FluidCubeAddDensity(cube,c/2+k,c/2+l,c/2+m ,amount);
 
-                        fprintf(fp,"%i,%i,%i,%.5g",c/2+k,c/2+l,c/2+m ,float_rand(150,200));
+                        float amount =float_rand(100,150);
+                        FluidCubeAddDensity(cube,c+k,c+l,c+m ,amount);
+
+                        fprintf(fp,"%i,%i,%i,%.5f",c+k,c+l,c+m ,amount);
 
                         //add velocity
 
-                        float angle1 = noise(t) * 6.28318530718; 
-                        float angle2 = noise(t+0.1) * 6.28318530718; 
-                        t+=0.02;
-                        float vel_mag = float_rand(0.01,1);
+                        float angle1 = 6.28318530718; 
+                        float angle2 = 6.28318530718; 
+                        float vel_mag = 0.001;
 
-                        FluidCubeAddVelocity( cube,c/2+k,c/2+l,c/2+m , vel_mag*cos(angle1)*cos(angle2),vel_mag*sin(angle1),vel_mag*cos(angle1)*sin(angle1));
+                        FluidCubeAddVelocity( cube,c+k,c+l,c+m , vel_mag*cos(angle1)*cos(angle2),vel_mag*sin(angle1),vel_mag*cos(angle1)*sin(angle1));
 
-                        fprintf(fp,"%i,%i,%i,%.5g,%.5g,%.5g",c/2+k,c/2+l,c/2+m,vel_mag*cos(angle1)*cos(angle2),vel_mag*sin(angle1),vel_mag*cos(angle1)*sin(angle1));
+                        fprintf(fp,"%i,%i,%i,%.5f,%.5f,%.5f",c+k,c+l,c+m,vel_mag*cos(angle1)*cos(angle2),vel_mag*sin(angle1),vel_mag*cos(angle1)*sin(angle1));
 
                        
 
@@ -436,14 +495,19 @@ int main(){
                 }
             }
 
+            freeNoise(perlin);
+
 
         }
+
+
+        FluidCubeFree(cube);
 
     }
 
 
 
-
+    
 
     return 0;
 }
